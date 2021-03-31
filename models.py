@@ -63,6 +63,10 @@ def create_modules(module_defs):
             layers = [int(x) for x in module_def['layers'].split(',')]
             filters = sum([output_filters[i + 1 if i > 0 else i] for i in layers])
             modules.add_module('route_%d' % i, EmptyLayer())
+            if 'groups' in module_def:
+                groups = int(module_def['groups'])
+                filters = filters // groups
+            modules.add_module('route_%d' % i, EmptyLayer())
 
         elif module_def['type'] == 'shortcut':
             filters = output_filters[int(module_def['from'])]
@@ -254,6 +258,11 @@ class Darknet(nn.Module):
                     x = layer_outputs[layer_i[0]]
                 else:
                     x = torch.cat([layer_outputs[i] for i in layer_i], 1)
+                if 'groups' in module_def:
+                    groups = int(module_def['groups'])
+                    group_id = int(module_def['group_id'])
+                    size = int(x.shape[1]) // groups
+                    x = torch.split(x, size, dim = 1)[group_id]
             elif mtype == 'shortcut':
                 layer_i = int(module_def['from'])
                 x = layer_outputs[-1] + layer_outputs[layer_i]
@@ -290,8 +299,8 @@ def shift_tensor_vertically(t, delta):
     return res 
 
 def create_grids(self, img_size, nGh, nGw):
-    self.stride = img_size[0]/nGw
-    assert self.stride == img_size[1] / nGh, \
+    self.stride = int(img_size[0]/nGw)
+    assert self.stride == int(img_size[1] / nGh), \
             "{} v.s. {}/{}".format(self.stride, img_size[1], nGh)
 
     # build xy offsets
